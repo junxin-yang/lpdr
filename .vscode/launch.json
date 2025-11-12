@@ -1,0 +1,26 @@
+{
+    "version": "0.2.0",
+    "configurations": [
+        {
+            "name": "wR2_pretrain",
+            "type": "debugpy",
+            "request": "launch",
+            "program": "rpnet/wR2_pretrain.py",
+            "console": "integratedTerminal",
+            "args": [
+                "-i",
+                "data/CCPD2019",
+                "-n",
+                "25",
+                "-b",
+                "4",
+                "-w",
+                "rpnet/result/wR2.out",
+                "-l",
+                "rpnet/result/runs/wR2",
+                "-m",
+                "rpnet/result/wR2"
+            ]
+        }
+    ]
+}
