@@ -30,7 +30,7 @@ def get_args():
                     help="file for re-train")
     ap.add_argument("-f", "--folder", required=True,
                     help="folder to store model")
-    ap.add_argument("-w", "--writeFile", default='result/fh02.out',
+    ap.add_argument("-w", "--writeFile", default='rpnet/result/fh02.out',
                     help="file for output")
     ap.add_argument("-l", "--logDir", default='rpnet/result/runs/fh02',
                         help="directory for tensorboard logs")
@@ -70,8 +70,7 @@ imgSize = (480, 480)
 provNum, alphaNum, adNum = 38, 25, 35
 batchSize = int(args["batchsize"]) if use_gpu else 2
 imgDirs = args["images"]
-modelFolder = str(args["folder"]) if str(args["folder"])[-1] == '/' else str(args["folder"]) + '/'
-storeName = modelFolder + 'fh02.pth'
+modelFolder = str(args["folder"])
 if not os.path.isdir(modelFolder):
     os.mkdir(modelFolder)
 
@@ -90,12 +89,12 @@ if not resume_file == '111':
         print ("fail to load existed model! Existing ...")
         exit(0)
     print ("Load existed model! %s" % resume_file)
-    model_conv = fh02(num_points=numPoints, num_classes=numClasses, provNum=38, alphaNum=25, adNum=35, device_id='cpu')
+    model_conv = fh02(num_points=numPoints, num_classes=numClasses, provNum=provNum, alphaNum=alphaNum, adNum=adNum, device_id=device_id)
     # model_conv = torch.nn.DataParallel(model_conv, device_ids=range(torch.cuda.device_count()))
     model_conv.load_state_dict(torch.load(resume_file))
     model_conv = model_conv.to(device=device_id)
 else:
-    model_conv = fh02(num_points=numPoints, num_classes=numClasses, wrPath=wR2Path, provNum=38, alphaNum=25, adNum=35, device_id=device_id)
+    model_conv = fh02(num_points=numPoints, num_classes=numClasses, wrPath=wR2Path, provNum=provNum, alphaNum=alphaNum, adNum=adNum, device_id=device_id)
     if use_gpu:
         # model_conv = torch.nn.DataParallel(model_conv, device_ids=range(torch.cuda.device_count()))
         model_conv = model_conv.to(device=device_id)
@@ -118,7 +117,6 @@ lrScheduler = lr_scheduler.StepLR(optimizer_conv, step_size=5, gamma=0.1)
 
 def isEqual(labelGT, labelP):
     compare = [1 if int(labelGT[i]) == int(labelP[i]) else 0 for i in range(7)]
-    # print(sum(compare))
     return sum(compare)
 
 
@@ -154,15 +152,16 @@ def eval(model, val_loader, epoch):
 
 
 def train_model(model, train_loader, val_loader, criterion, optimizer, num_epochs=25):
-    # since = time.time()
+    precision_max = 0.0
     for epoch in range(epoch_start, num_epochs):
         lossAver = []
         model.train(True)
-        lrScheduler.step()
         start = time()
+        storeName = modelFolder + '/fh02_' + str(epoch) + '.pth'
 
         for i, (XI, Y, labels, ims) in enumerate(tqdm(train_loader, desc=f"Training Epoch {epoch}")):
             if not len(XI) == batchSize:
+                print('skip this batch')
                 continue
 
             YI = [[int(ee) for ee in el.split('_')[:7]] for el in labels]
@@ -186,32 +185,30 @@ def train_model(model, train_loader, val_loader, criterion, optimizer, num_epoch
             loss += 0.2 * nn.L1Loss().to(device_id)(fps_pred[:, 2:], y[:, 2:])
             for j in range(7):
                 l = Variable(torch.LongTensor([el[j] for el in YI]).to(device_id))
-                loss += criterion(y_pred[j], l)
+                loss += criterion(y_pred[j], l) # y_pred[j]:[batch, num_classes],  l: [batch]
 
             writer.add_scalar('train/loss', loss.item(), epoch * len(train_loader) + i)
             # Zero gradients, perform a backward pass, and update the weights.
             optimizer.zero_grad()
             loss.backward()
             optimizer.step()
-
             try:
-                lossAver.append(loss.data[0])
+                lossAver.append(loss.item())
             except:
                 pass
 
-            if i % 50 == 1:
-                with open(args['writeFile'], 'a') as outF:
-                    outF.write('train %s images, use %s seconds, loss %s\n' % (i*batchSize, time() - start, sum(lossAver) / len(lossAver) if len(lossAver)>0 else 'NoLoss'))
-                torch.save(model.state_dict(), storeName)
         writer.add_scalar('train/lr', optimizer_conv.param_groups[0]['lr'], epoch)
         lrScheduler.step()
         writer.add_scalar('train/epoch_loss', sum(lossAver) / len(lossAver), epoch)
         print ('%s %s %s\n' % (epoch, sum(lossAver) / len(lossAver), time()-start))
         count, correct, error, precision, avgTime = eval(model, val_loader, epoch)
+        if precision > precision_max:
+            precision_max = precision
+            torch.save(model.state_dict(), modelFolder + '/fh02_best.pth')
         with open(args['writeFile'], 'a') as outF:
-            outF.write('%s %s %s\n' % (epoch, sum(lossAver) / len(lossAver), time() - start))
-            outF.write('*** total %s error %s precision %s avgTime %s\n' % (count, error, precision, avgTime))
-        torch.save(model.state_dict(), storeName + str(epoch))
+            outF.write('epoch: %s, train loss: %s, train time: %s\n' % (epoch, sum(lossAver) / len(lossAver), time() - start))
+            outF.write('*** total %s error %s precision %s avgTime(val_one_img ) %s\n' % (count, error, precision, avgTime))
+        torch.save(model.state_dict(), storeName)
     return model
 
 
@@ -220,3 +217,6 @@ if __name__ == '__main__':
     count, correct, error, precision, avgTime = eval(model_conv, val_loader)
     with open(args['writeFile'], 'a') as outF:
         outF.write('Final val: total %s error %s precision %s avgTime %s\n' % (count, error, precision, avgTime))
+
+
+# python rpnet/rpnet_train.py -i data/CCPD2019 -n 1000 -b 4 -se 0 -r 111 -f rpnet/result/fh02 -w rpnet/result/fh02.out -l rpnet/result/runs/fh02 -p rpnet/result/wR2/wR2_best.pth

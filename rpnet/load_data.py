@@ -6,7 +6,7 @@ import numpy as np
 
 class labelFpsDataLoader(Dataset):
     def __init__(self, img_dir, imgSize, is_transform=None, split=None):
-        self.img_dir = img_dir
+        self.base_dir = img_dir
         self.img_paths = []
         if split is not None:
             self.split_file = os.path.join(self.base_dir, 'splits', f'{split}.txt')
@@ -51,7 +51,7 @@ class labelFpsDataLoader(Dataset):
 
 class labelTestDataLoader(Dataset):
     def __init__(self, img_dir, imgSize, is_transform=None, split=None):
-        self.img_dir = img_dir
+        self.base_dir = img_dir
         self.img_paths = []
         if split is not None:
             self.split_file = os.path.join(self.base_dir, 'splits', f'{split}.txt')
@@ -82,7 +82,6 @@ class labelTestDataLoader(Dataset):
 
 class ChaLocDataLoader(Dataset):
     def __init__(self, img_dir, imgSize, is_transform=None, split=None):
-        self.img_dir = img_dir
         self.img_paths = []
         self.base_dir = img_dir
         self.split = split

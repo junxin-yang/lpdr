@@ -21,6 +21,33 @@
                 "-m",
                 "rpnet/result/wR2"
             ]
+        },
+        {
+            "name": "rpnet_train",
+            "type": "debugpy",
+            "request": "launch",
+            "program": "rpnet/rpnet_train.py",
+            "console": "integratedTerminal",
+            "args": [
+                "-i",
+                "data/CCPD2019",
+                "-n",
+                "1000",
+                "-b",
+                "4",
+                "-se",
+                "0",
+                "-r",
+                "111",
+                "-f",
+                "rpnet/result/fh02",
+                "-w",
+                "rpnet/result/fh02.out",
+                "-l",
+                "rpnet/result/runs/fh02",
+                "-p",
+                "rpnet/result/wR2/wR2_best.pth"
+            ]
         }
     ]
 }

@@ -1,7 +1,7 @@
 import torch
 import torch.nn as nn
-from wR2 import wR2
-from roi_pooling import roi_pooling_ims
+from .wR2 import wR2
+from .roi_pooling import roi_pooling_ims
 from torch.autograd import Variable
 
 class fh02(nn.Module):
@@ -72,19 +72,19 @@ class fh02(nn.Module):
         #     param.requires_grad = False
 
     def forward(self, x):
-        x0 = self.wR2.module.features[0](x)
-        _x1 = self.wR2.module.features[1](x0)
-        x2 = self.wR2.module.features[2](_x1)
-        _x3 = self.wR2.module.features[3](x2)
-        x4 = self.wR2.module.features[4](_x3)
-        _x5 = self.wR2.module.features[5](x4)
+        x0 = self.wR2.features[0](x)
+        _x1 = self.wR2.features[1](x0)
+        x2 = self.wR2.features[2](_x1)
+        _x3 = self.wR2.features[3](x2)
+        x4 = self.wR2.features[4](_x3)
+        _x5 = self.wR2.features[5](x4)
 
-        x6 = self.wR2.module.features[6](_x5)
-        x7 = self.wR2.module.features[7](x6)
-        x8 = self.wR2.module.features[8](x7)
-        x9 = self.wR2.module.features[9](x8)
+        x6 = self.wR2.features[6](_x5)
+        x7 = self.wR2.features[7](x6)
+        x8 = self.wR2.features[8](x7)
+        x9 = self.wR2.features[9](x8)
         x9 = x9.view(x9.size(0), -1)
-        boxLoc = self.wR2.module.classifier(x9)
+        boxLoc = self.wR2.classifier(x9)
 
         h1, w1 = _x1.data.size()[2], _x1.data.size()[3]
         p1 = Variable(torch.FloatTensor([[w1,0,0,0],[0,h1,0,0],[0,0,w1,0],[0,0,0,h1]]).to(self.device_id), requires_grad=False)

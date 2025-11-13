@@ -1,4 +1,5 @@
 data/
+rpnet/result
 ultralytics/CCPD2019_YOLOformat/
 ultralytics/detection_results
 ultralytics/model_pretrain
