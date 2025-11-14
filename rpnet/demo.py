@@ -8,7 +8,7 @@ import numpy as np
 from os import path, mkdir
 from load_data import *
 from time import time
-from rpnet.component.roi_pooling import roi_pooling_ims
+from component.roi_pooling import roi_pooling_ims
 
 ap = argparse.ArgumentParser()
 ap.add_argument("-i", "--input", required=True,

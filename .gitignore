@@ -3,4 +3,7 @@ rpnet/result
 ultralytics/CCPD2019_YOLOformat/
 ultralytics/detection_results
 ultralytics/model_pretrain
+ocr/crnn/checkpoints
+ocr/crnn/data
+ocr/crnn/run
 yolo11n.pt

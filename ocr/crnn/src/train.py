@@ -6,10 +6,11 @@ from torch.utils.data import DataLoader
 import torch.optim as optim
 from torch.nn import CTCLoss
 
-from dataset import Synth90kDataset, synth90k_collate_fn
+from dataset import CCPDDataset, ccpd_collate_fn
 from model import CRNN
 from evaluate import evaluate
 from config import train_config as config
+from torch.utils.tensorboard import SummaryWriter
 
 
 def train_batch(crnn, data, optimizer, criterion, device):
@@ -47,13 +48,16 @@ def main():
     img_width = config['img_width']
     img_height = config['img_height']
     data_dir = config['data_dir']
+    log_dir = config["log_dir"]
 
-    device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
+    writer = SummaryWriter(log_dir=log_dir) 
+
+    device = torch.device('cuda:1' if torch.cuda.is_available() else 'cpu')
     print(f'device: {device}')
 
-    train_dataset = Synth90kDataset(root_dir=data_dir, mode='train',
+    train_dataset = CCPDDataset(root_dir=data_dir, mode='train',
                                     img_height=img_height, img_width=img_width)
-    valid_dataset = Synth90kDataset(root_dir=data_dir, mode='dev',
+    valid_dataset = CCPDDataset(root_dir=data_dir, mode='val',
                                     img_height=img_height, img_width=img_width)
 
     train_loader = DataLoader(
@@ -61,16 +65,16 @@ def main():
         batch_size=train_batch_size,
         shuffle=True,
         num_workers=cpu_workers,
-        collate_fn=synth90k_collate_fn)
+        collate_fn=ccpd_collate_fn)
     valid_loader = DataLoader(
         dataset=valid_dataset,
         batch_size=eval_batch_size,
         shuffle=True,
         num_workers=cpu_workers,
-        collate_fn=synth90k_collate_fn)
+        collate_fn=ccpd_collate_fn)
 
-    num_class = len(Synth90kDataset.LABEL2CHAR) + 1
-    crnn = CRNN(1, img_height, img_width, num_class,
+    num_class = len(CCPDDataset.LABEL2CHAR) + 1
+    crnn = CRNN(3, img_height, img_width, num_class,
                 map_to_seq_hidden=config['map_to_seq_hidden'],
                 rnn_hidden=config['rnn_hidden'],
                 leaky_relu=config['leaky_relu'])
@@ -83,6 +87,7 @@ def main():
     criterion.to(device)
 
     assert save_interval % valid_interval == 0
+    best_acc = 0.0
     i = 1
     for epoch in range(1, epochs + 1):
         print(f'epoch: {epoch}')
@@ -90,6 +95,7 @@ def main():
         tot_train_count = 0
         for train_data in train_loader: # image, target, target_length
             loss = train_batch(crnn, train_data, optimizer, criterion, device)
+            writer.add_scalar('Train/Loss', loss, i)
             train_size = train_data[0].size(0)  # image.shape[0]
 
             tot_train_loss += loss
@@ -102,6 +108,16 @@ def main():
                                       decode_method=config['decode_method'],
                                       beam_size=config['beam_size'])
                 print('valid_evaluation: loss={loss}, acc={acc}'.format(**evaluation))
+                writer.add_scalar('Valid/Loss', evaluation['loss'], i)
+                writer.add_scalar('Valid/Accuracy', evaluation['acc'], i)
+                if evaluation['acc'] > best_acc:
+                    best_acc = evaluation['acc']
+                    prefix = 'crnn_best'
+                    loss = evaluation['loss']
+                    save_model_path = os.path.join(config['checkpoints_dir'],
+                                                   f'{prefix}_epoch{epoch}_iter{i:06}_loss{loss}.pt')
+                    torch.save(crnn.state_dict(), save_model_path)
+                    print('save best model at ', save_model_path)
 
                 if i % save_interval == 0:
                     prefix = 'crnn'
@@ -112,7 +128,7 @@ def main():
                     print('save model at ', save_model_path)
 
             i += 1
-
+        writer.add_scalar('Train/Epoch_Loss', tot_train_loss / tot_train_count, epoch)
         print('train_loss: ', tot_train_loss / tot_train_count)
 
 

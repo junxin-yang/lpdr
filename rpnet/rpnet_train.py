@@ -214,7 +214,7 @@ def train_model(model, train_loader, val_loader, criterion, optimizer, num_epoch
 
 if __name__ == '__main__':
     model_conv = train_model(model_conv, train_loader, val_loader, criterion, optimizer_conv, num_epochs=epochs)
-    count, correct, error, precision, avgTime = eval(model_conv, val_loader)
+    count, correct, error, precision, avgTime = eval(model_conv, test_loader)
     with open(args['writeFile'], 'a') as outF:
         outF.write('Final val: total %s error %s precision %s avgTime %s\n' % (count, error, precision, avgTime))
 

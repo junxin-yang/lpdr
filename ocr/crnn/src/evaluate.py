@@ -3,7 +3,7 @@ from torch.utils.data import DataLoader
 from torch.nn import CTCLoss
 from tqdm import tqdm
 
-from dataset import Synth90kDataset, synth90k_collate_fn
+from dataset import CCPDDataset, ccpd_collate_fn
 from model import CRNN
 from ctc_decoder import ctc_decode
 from config import evaluate_config as config
@@ -27,7 +27,7 @@ def evaluate(crnn, dataloader, criterion,
         for i, data in enumerate(dataloader):
             if max_iter and i >= max_iter:
                 break
-            device = 'cuda' if next(crnn.parameters()).is_cuda else 'cpu'
+            device = 'cuda:1' if next(crnn.parameters()).is_cuda else 'cpu'
 
             images, targets, target_lengths = [d.to(device) for d in data]
 
@@ -73,10 +73,10 @@ def main():
     img_height = config['img_height']
     img_width = config['img_width']
 
-    device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
+    device = torch.device('cuda:1' if torch.cuda.is_available() else 'cpu')
     print(f'device: {device}')
 
-    test_dataset = Synth90kDataset(root_dir=config['data_dir'], mode='test',
+    test_dataset = CCPDDataset(root_dir=config['data_dir'], mode='test',
                                    img_height=img_height, img_width=img_width)
 
     test_loader = DataLoader(
@@ -84,9 +84,9 @@ def main():
         batch_size=eval_batch_size,
         shuffle=False,
         num_workers=cpu_workers,
-        collate_fn=synth90k_collate_fn)
+        collate_fn=ccpd_collate_fn)
 
-    num_class = len(Synth90kDataset.LABEL2CHAR) + 1
+    num_class = len(CCPDDataset.LABEL2CHAR) + 1
     crnn = CRNN(1, img_height, img_width, num_class,
                 map_to_seq_hidden=config['map_to_seq_hidden'],
                 rnn_hidden=config['rnn_hidden'],

@@ -1,8 +1,8 @@
 
 common_config = {
-    'data_dir': 'data/mnt/ramdisk/max/90kDICT32px/',
-    'img_width': 100,
-    'img_height': 32,
+    'data_dir': 'ocr/crnn/data',
+    'img_width': 200,
+    'img_height': 64,
     'map_to_seq_hidden': 64,
     'rnn_hidden': 256,
     'leaky_relu': False,
@@ -21,14 +21,15 @@ train_config = {
     'valid_max_iter': 100,
     'decode_method': 'greedy',
     'beam_size': 10,
-    'checkpoints_dir': 'checkpoints/'
+    'checkpoints_dir': 'ocr/crnn/checkpoints/',
+    'log_dir': 'ocr/crnn/run/'
 }
 train_config.update(common_config)
 
 evaluate_config = {
     'eval_batch_size': 512,
     'cpu_workers': 4,
-    'reload_checkpoint': 'checkpoints/crnn_synth90k.pt',
+    'reload_checkpoint': 'ocr/crnn/checkpoints/crnn_synth90k.pt',
     'decode_method': 'beam_search',
     'beam_size': 10,
 }
