@@ -34,7 +34,7 @@ def get_args():
                     help="file for output")
     ap.add_argument("-l", "--logDir", default='rpnet/result/runs/fh02',
                         help="directory for tensorboard logs")
-    ap.add_argument("-p", "--wR2Path", default='rpnet/result/wR2/wR2.pth',
+    ap.add_argument("-p", "--wR2Path", default='rpnet/result/wR2/wR2_best.pth',
                         help="directory for tensorboard logs")
     return ap.parse_args()
 

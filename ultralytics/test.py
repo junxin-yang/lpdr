@@ -1,34 +1,40 @@
-import os
-from matplotlib import pyplot as plt
-import cv2
-import numpy as np
+from ultralytics import YOLO
 
-files = os.listdir('data/CCPD2019/ccpd_base')
-output_dir = 'output'
-os.makedirs(output_dir, exist_ok=True)
 
-for file in files[:5]:
-    img_name = os.path.join('data/CCPD2019/ccpd_base', file)
-    img = cv2.imread(img_name)
-    img = cv2.cvtColor(img, cv2.COLOR_BGR2RGB)
-    resizedImage = cv2.resize(img, (480, 480))  # HWC
+model = YOLO('ultralytics/detection_results/yolov8n_CCPD2019_plate_detection/weights/best.pt')
 
-    iname = img_name.rsplit('/', 1)[-1].rsplit('.', 1)[0].split('-')
-    [leftUp, rightDown] = [[int(eel) for eel in el.split('&')] for el in iname[2].split('_')]
+# metrics = model.val(
+#     data='ultralytics/data.yaml',  # 数据集配置文件
+#     split='val',                   # 使用验证集（val/test）
+#     device=1,
+#     plots=True                     # 生成评估图表
+# )
 
-    ori_w, ori_h = float(img.shape[1]), float(img.shape[0])
-    img_w, img_h = 480, 480
+# # 查看关键指标[9](@ref)
+# print(f"精确率 (Precision): {metrics.box.mp}")
+# print(f"召回率 (Recall): {metrics.box.mr}")
+# print(f"mAP@0.5: {metrics.box.map50}")
+# print(f"mAP@0.5:0.95: {metrics.box.map}")
 
-    # 直接对原图角点做缩放
-    scale_x = img_w / ori_w
-    scale_y = img_h / ori_h
-    leftUp_scaled = [int(leftUp[0] * scale_x), int(leftUp[1] * scale_y)]
-    rightDown_scaled = [int(rightDown[0] * scale_x), int(rightDown[1] * scale_y)]
+# # 如果需要访问每个类别的详细指标
+# if hasattr(metrics, 'boxes'):
+#     print(f"每个类别的mAP: {metrics.box.maps}")
 
-    # 可视化
-    plt.imshow(resizedImage)
-    plt.plot([leftUp_scaled[0], rightDown_scaled[0], rightDown_scaled[0], leftUp_scaled[0], leftUp_scaled[0]],
-             [leftUp_scaled[1], leftUp_scaled[1], rightDown_scaled[1], rightDown_scaled[1], leftUp_scaled[1]], color='blue')
-    plt.axis('off')
-    plt.savefig(f"{output_dir}/{file}.png")
-    plt.close()
+# print("----------")
+
+metrics = model.val(
+    data='ultralytics/data.yaml',  # 数据集配置文件
+    split='test',                   # 使用验证集（val/test）
+    device=1,
+    plots=True                     # 生成评估图表
+)
+
+# 查看关键指标[9](@ref)
+print(f"精确率 (Precision): {metrics.box.mp}")
+print(f"召回率 (Recall): {metrics.box.mr}")
+print(f"mAP@0.5: {metrics.box.map50}")
+print(f"mAP@0.5:0.95: {metrics.box.map}")
+
+# 如果需要访问每个类别的详细指标
+if hasattr(metrics, 'boxes'):
+    print(f"每个类别的mAP: {metrics.box.maps}")

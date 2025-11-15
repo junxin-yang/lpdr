@@ -122,6 +122,65 @@ def isEqual(labelGT, labelP):
     return sum(compare)
 
 
+def load_points_gt(image_name):
+    iname = image_name.rsplit('/', 1)[-1].rsplit('.', 1)[0].split('-')
+    [leftUp, rightDown] = [[int(eel) for eel in el.split('&')] for el in iname[2].split('_')]
+    x1, y1 = int(leftUp[0]), int(leftUp[1])
+    x2, y2 = int(rightDown[0]), int(rightDown[1])
+    points_gt = [x1, y1, x2, y2]
+    return points_gt
+
+
+def corners_to_bbox(corners):
+
+    x_coords = [point[0] for point in corners]
+    y_coords = [point[1] for point in corners]
+    
+    # 计算边界框的坐标
+    x_min = min(x_coords)
+    y_min = min(y_coords)
+    x_max = max(x_coords)
+    y_max = max(y_coords)
+    
+    bbox = [x_min, y_min, x_max, y_max]
+    return bbox
+
+
+def calculate_iou(box1, box2):
+
+    box1 = np.array(box1, dtype=np.float32)
+    box2 = np.array(box2, dtype=np.float32)
+    
+
+    # 计算交集区域的坐标
+    x1_inter = max(box1[0], box2[0])
+    y1_inter = max(box1[1], box2[1])
+    x2_inter = min(box1[2], box2[2])
+    y2_inter = min(box1[3], box2[3])
+    
+    # 计算交集面积
+    inter_width = max(0, x2_inter - x1_inter)
+    inter_height = max(0, y2_inter - y1_inter)
+    intersection_area = inter_width * inter_height
+    
+    # 计算各自面积
+    area1 = (box1[2] - box1[0]) * (box1[3] - box1[1])
+    area2 = (box2[2] - box2[0]) * (box2[3] - box2[1])
+    
+    # 计算并集面积
+    union_area = area1 + area2 - intersection_area
+    
+    # 避免除零错误
+    if union_area == 0:
+        return 0.0
+    
+    # 计算IoU
+    iou = intersection_area / union_area
+    
+    return iou
+
+
+
 def main():
 
     base_dir = "data/CCPD2019"
@@ -162,6 +221,8 @@ def main():
                 basename = os.path.basename(img_path)
                 parent_dir = os.path.basename(os.path.dirname(img_path))
                 total_class[parent_dir] = total_class.get(parent_dir, {})
+                total_class[parent_dir]['FN'] = total_class[parent_dir].get('FN', 0)
+                total_class[parent_dir]['TN'] = total_class[parent_dir].get('TN', 0)
                 result = os.path.join(parent_dir, basename)
                 data_dir.append((result, label))
             else:
@@ -169,7 +230,7 @@ def main():
 
     correct = 0
     total = 0
-    for image_name, label in tqdm(data_dir[:10]):
+    for image_name, label in tqdm(data_dir):
         if label is None:
             continue
         class_name = os.path.dirname(image_name)
@@ -180,11 +241,21 @@ def main():
         points = detect_plate_corners(model, image_path, detect_dir)
         if not points:
             print(f'No detection: {image_path}')
+            total_class[class_name]['FN'] = total_class[class_name].get('FN', 0) + 1
             continue
         if points:
             cropped_plate = crop_plate_by_points(image_path, points)
             img_dir, img_save_path = create_dir(image_path, crop_dir)
             cropped_plate.save(os.path.join(img_dir, img_save_path))
+
+        
+        box_gt = load_points_gt(image_name)
+        box_pred = corners_to_bbox(points)
+        iou = calculate_iou(box_gt, box_pred)
+        if iou < 0.5:
+            total_class[class_name]['FP'] = total_class[class_name].get('FP', 0) + 1
+        else:
+            total_class[class_name]['TP'] = total_class[class_name].get('TP', 0) + 1
         
         cropped_resized = cropped_plate.resize(
             (config['img_width'], config['img_height']), resample=Image.LANCZOS)
@@ -211,7 +282,6 @@ def main():
         json.dump(total_class, f, indent=4, ensure_ascii=False)
     with open('overall_accuracy.txt', 'w') as f:
         f.write(f'Overall Accuracy: {correct}/{total} = {correct/total:.4f}\n')
-
 
 
 if __name__ == '__main__':

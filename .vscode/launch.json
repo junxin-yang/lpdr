@@ -48,6 +48,19 @@
                 "-p",
                 "rpnet/result/wR2/wR2_best.pth"
             ]
+        },
+        {
+            "name": "rpnet_eval",
+            "type": "debugpy",
+            "request": "launch",
+            "program": "rpnet/rpnet_eval.py",
+            "console": "integratedTerminal",
+            "args": [
+                "-i",
+                "data/CCPD2019",
+                "-m",
+                "rpnet/result/fh02/fh02_best.pth",
+            ]
         }
     ]
 }
