@@ -6,4 +6,9 @@ ultralytics/model_pretrain
 ocr/crnn/checkpoints
 ocr/crnn/data
 ocr/crnn/run
+crop_results
+detect_dir
+lpdr_results
 yolo11n.pt
+accuracy_by_class.json
+overall_accuracy.txt

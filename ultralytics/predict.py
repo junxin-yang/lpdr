@@ -1,8 +1,28 @@
+import sys
+sys.path.append('/mnt/Disk1/yjx/code/LPDR')
 from ultralytics import YOLO
 import cv2
 import numpy as np
 from PIL import Image
 import os
+from ocr.crnn.src.config import common_config as config
+from ocr.crnn.src.model import CRNN
+from ocr.crnn.src.ctc_decoder import ctc_decode
+from ocr.crnn.src.dataset import CCPDDataset
+import torch
+from tqdm import tqdm
+import matplotlib.pyplot as plt
+import matplotlib.patches as patches
+import json
+
+
+plt.rcParams['font.sans-serif'] = [
+    'Noto Sans CJK JP',
+    'AR PL UMing CN',
+    'AR PL UKai CN',
+    'DejaVu Sans'
+]
+plt.rcParams['axes.unicode_minus'] = False
 
 
 def create_dir(image_path, output_dir):
@@ -13,7 +33,7 @@ def create_dir(image_path, output_dir):
 
 # 检测车牌并返回四个角点
 def detect_plate_corners(model, image_path, output_dir):
-    results = model.predict(image_path, imgsz=640, conf=0.5)
+    results = model.predict(image_path, imgsz=640, conf=0.5, verbose=False, device=device)
     result = results[0].cpu()
     img = result.plot()
     base_dir, img_save_path = create_dir(image_path, output_dir)
@@ -44,20 +64,157 @@ def crop_plate_by_points(image_path, points):
     cropped_plate_pil = Image.fromarray(cropped_plate)
     return cropped_plate_pil
 
+
+def predict(crnn, data, label2char, decode_method, beam_size):
+    crnn.eval()
+    with torch.no_grad():
+        images = data.to(device)
+        logits = crnn(images)
+        log_probs = torch.nn.functional.log_softmax(logits, dim=2)
+        preds = ctc_decode(log_probs, method=decode_method, beam_size=beam_size,
+                            label2char=label2char)
+    return preds[0]
+
+
+def show_result(path, points, pred, output_dir):
+    
+    base_dir, img_save_path = create_dir(path, output_dir)
+    
+    # 读取图片
+    img = cv2.imread(path)
+    img = cv2.cvtColor(img, cv2.COLOR_BGR2RGB)
+    
+    fig, ax = plt.subplots(1, 1, figsize=(12, 8))
+    ax.imshow(img)
+    ax.axis('off')
+    
+    pts = np.array(points, np.int32)
+    polygon = patches.Polygon(pts, linewidth=2, edgecolor='lime', 
+                             facecolor='none', alpha=0.8)
+    ax.add_patch(polygon)
+    
+    text = ''.join(pred)
+    x, y = points[0]
+    
+    text_bg = patches.Rectangle((x, y-30), len(text)*15, 25, 
+                               facecolor='black', alpha=0.6, 
+                               edgecolor='white', linewidth=1)
+    ax.add_patch(text_bg)
+    
+    ax.text(x+5, y-10, text, fontsize=12, color='white', weight='bold', verticalalignment='top')
+    
+    
+    plt.tight_layout()
+    save_path = os.path.join(base_dir, img_save_path)
+    
+    os.makedirs(os.path.dirname(save_path), exist_ok=True)
+    
+    plt.savefig(save_path, dpi=300, bbox_inches='tight', 
+                facecolor='white', edgecolor='none')
+    plt.close()
+    return text
+
+
+def isEqual(labelGT, labelP):
+    if len(labelGT) != len(labelP):
+        return 0
+    compare = [1 if int(labelGT[i]) == int(labelP[i]) else 0 for i in range(7)]
+    return sum(compare)
+
+
 def main():
+
+    base_dir = "data/CCPD2019"
+    split_files = "ocr/crnn/data/splits/test.txt"
     detect_dir = "detect_dir"
     os.makedirs(detect_dir, exist_ok=True)
     crop_dir = "crop_results"
     os.makedirs(crop_dir, exist_ok=True)
+    lpdr_dir = "lpdr_results"
+    os.makedirs(lpdr_dir, exist_ok=True)
+
     model_path = "ultralytics/detection_results/yolov8n_CCPD2019_plate_detection/weights/best.pt"
     model = YOLO(model_path)
-    image_path = "data/CCPD2019/ccpd_db/02-1_4-352&371_544&458-539&454_352&458_357&375_544&371-0_0_20_24_21_30_27-19-2.jpg"
-    points = detect_plate_corners(model, image_path, detect_dir)
-    if points:
-        cropped_plate = crop_plate_by_points(image_path, points)
-        base_dir, img_save_path = create_dir(image_path, crop_dir)
-        cropped_plate.save(os.path.join(base_dir, img_save_path))
 
-# 示例用法
+    num_class = len(CCPDDataset.LABEL2CHAR) + 1
+    crnn = CRNN(3, config['img_height'], config['img_width'], num_class,
+                map_to_seq_hidden=config['map_to_seq_hidden'],
+                rnn_hidden=config['rnn_hidden'],
+                leaky_relu=config['leaky_relu'])
+    reload_checkpoint = "ocr/crnn/checkpoints/crnn_best_epoch23_iter069000_loss0.03195886522659069.pt"
+    crnn.load_state_dict(torch.load(reload_checkpoint, map_location=device))
+    crnn.to(device)
+
+    decode_method = "greedy"
+    beam_size = 10
+    total_class = {}
+
+    with open(split_files, "r") as f:
+        data_dir = []
+        for line in f:
+            line = line.strip()
+            if not line:
+                continue
+            # 按第一个空格分割
+            parts = line.split(' ', 1)
+            if len(parts) == 2:
+                img_path, label = parts
+                basename = os.path.basename(img_path)
+                parent_dir = os.path.basename(os.path.dirname(img_path))
+                total_class[parent_dir] = total_class.get(parent_dir, {})
+                result = os.path.join(parent_dir, basename)
+                data_dir.append((result, label))
+            else:
+                data_dir.append((parts[0], None))
+
+    correct = 0
+    total = 0
+    for image_name, label in tqdm(data_dir[:10]):
+        if label is None:
+            continue
+        class_name = os.path.dirname(image_name)
+        total_class[class_name]['total'] = total_class[class_name].get('total', 0) + 1
+        total += 1
+
+        image_path = os.path.join(base_dir, image_name)
+        points = detect_plate_corners(model, image_path, detect_dir)
+        if not points:
+            print(f'No detection: {image_path}')
+            continue
+        if points:
+            cropped_plate = crop_plate_by_points(image_path, points)
+            img_dir, img_save_path = create_dir(image_path, crop_dir)
+            cropped_plate.save(os.path.join(img_dir, img_save_path))
+        
+        cropped_resized = cropped_plate.resize(
+            (config['img_width'], config['img_height']), resample=Image.LANCZOS)
+        
+        img_np = np.array(cropped_resized)  # (H, W, 3)
+        img_np = img_np.transpose(2, 0, 1)  # (3, H, W)
+        img_np = img_np.astype(np.float32) / 127.5 - 1.0
+        img_tensor = torch.from_numpy(img_np).unsqueeze(0).to(device)  # (1, 3, H, W)
+
+        lp_preds = predict(crnn, img_tensor, CCPDDataset.LABEL2CHAR,
+                        decode_method=decode_method,
+                        beam_size=beam_size)
+        
+        text = show_result(image_path, points, lp_preds, lpdr_dir)
+        pred_text = [CCPDDataset.CHAR2LABEL[c] for c in text]
+        label_text = [CCPDDataset.CHAR2LABEL[c] for c in label]
+        if isEqual(pred_text, label_text) == 7:
+            correct += 1
+            total_class[class_name]['correct'] = total_class[class_name].get('correct', 0) + 1
+
+    print(f'Accuracy: {correct}/{total} = {correct/total:.4f}')
+    
+    with open('accuracy_by_class.json', 'w') as f:
+        json.dump(total_class, f, indent=4, ensure_ascii=False)
+    with open('overall_accuracy.txt', 'w') as f:
+        f.write(f'Overall Accuracy: {correct}/{total} = {correct/total:.4f}\n')
+
+
+
 if __name__ == '__main__':
+    device = torch.device('cuda:1' if torch.cuda.is_available() else 'cpu')
+    print(f'device: {device}')
     main()
