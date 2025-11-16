@@ -1,0 +1,26 @@
+{
+    "ccpd_blur": {
+        "total": 20611,
+        "correct": 7780
+    },
+    "ccpd_challenge": {
+        "total": 50003,
+        "correct": 29320
+    },
+    "ccpd_db": {
+        "total": 10132,
+        "correct": 4496
+    },
+    "ccpd_fn": {
+        "total": 20967,
+        "correct": 13285
+    },
+    "ccpd_rotate": {
+        "total": 10053,
+        "correct": 6710
+    },
+    "ccpd_tilt": {
+        "total": 30216,
+        "correct": 17731
+    }
+}

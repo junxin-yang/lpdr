@@ -340,7 +340,7 @@ def main():
         'config': config
     })
     
-    # 准备进程池参数
+    # 准备进程池参数 
     process_args = []
     for image_info in data_dir:
         if image_info[1] is not None:  # 只处理有标签的数据
